@@ -74,6 +74,58 @@ function patchWin32PdfPrinterBinPath() {
 
 patchWin32PdfPrinterBinPath();
 
+/**
+ * Windows 自启动 Run 项写入/删除封装
+ */
+function regAddRun(name, command) {
+  return new Promise((resolve, reject) => {
+    childProcess.execFile(
+      "reg",
+      [
+        "add",
+        "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run",
+        "/v",
+        name,
+        "/t",
+        "REG_SZ",
+        "/d",
+        command,
+        "/f",
+      ],
+      { windowsHide: true },
+      (err) => (err ? reject(err) : resolve()),
+    );
+  });
+}
+
+function regDeleteRun(name) {
+  return new Promise((resolve, reject) => {
+    childProcess.execFile(
+      "reg",
+      [
+        "delete",
+        "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run",
+        "/v",
+        name,
+        "/f",
+      ],
+      { windowsHide: true },
+      (err) => (err ? reject(err) : resolve()),
+    );
+  });
+}
+
+async function setWindowsAutoStart(enabled, exePath) {
+  if (process.platform !== "win32") return;
+  const runName = "hiprint";
+  const cmd = `"${exePath}" --autostart`;
+  if (enabled) {
+    await regAddRun(runName, cmd);
+  } else {
+    await regDeleteRun(runName).catch(() => {});
+  }
+}
+
 const { getPaperSizeInfo, getPaperSizeInfoAll } = require("win32-pdf-printer");
 const db = require("./database");
 let buildInfo = {};
@@ -967,4 +1019,5 @@ module.exports = {
   getCurrentPrintStatusByName,
   getMachineId,
   showAboutDialog,
+   setWindowsAutoStart,
 };

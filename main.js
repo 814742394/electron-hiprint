@@ -199,7 +199,7 @@ async function createWindow() {
   // 窗口左上角图标
   if (!app.isPackaged) {
     windowOptions.icon = path.join(__dirname, "build/icons/256x256.png");
-  } else {
+  } else if (process.platform === "darwin") {
     app.setLoginItemSettings({
       openAtLogin: store.get("openAtLogin"),
       openAsHidden: store.get("openAsHidden"),
@@ -245,7 +245,8 @@ async function createWindow() {
   // 主窗口 Dom 加载完毕
   MAIN_WINDOW.webContents.on("dom-ready", async () => {
     try {
-      if (!store.get("openAsHidden")) {
+      const isAutoStart = process.argv.includes("--autostart");
+      if (!store.get("openAsHidden") && !isAutoStart) {
         MAIN_WINDOW.show();
       }
       // 未打包时打开开发者工具

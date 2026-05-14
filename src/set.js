@@ -17,7 +17,7 @@ const {
 const path = require("path");
 const https = require("node:https");
 const fs = require("node:fs");
-const { store } = require("../tools/utils");
+const { store, setWindowsAutoStart } = require("../tools/utils");
 
 /**
  * @description: 创建设置窗口
@@ -145,10 +145,19 @@ function setConfig(event, data) {
           return;
         }
         store.set(data);
-        setTimeout(() => {
-          app.relaunch();
-          app.exit();
-        }, 500);
+        Promise.resolve()
+          .then(async () => {
+            if (app.isPackaged && process.platform === "win32") {
+              await setWindowsAutoStart(Boolean(data.openAtLogin), process.execPath);
+            }
+          })
+          .catch(() => {})
+          .finally(() => {
+            setTimeout(() => {
+              app.relaunch();
+              app.exit();
+            }, 500);
+          });
       }
     });
 }
