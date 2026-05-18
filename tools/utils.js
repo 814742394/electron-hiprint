@@ -207,6 +207,31 @@ const schema = {
     type: "boolean",
     default: true,
   },
+  // 串口配置
+  serialEnabled: {
+    type: "boolean",
+    default: false,
+  },
+  serialPort: {
+    type: "string",
+    default: "",
+  },
+  serialBaudRate: {
+    type: "number",
+    default: 9600,
+  },
+  serialDataBits: {
+    type: "number",
+    default: 8,
+  },
+  serialStopBits: {
+    type: "number",
+    default: 1,
+  },
+  serialParity: {
+    type: "string",
+    default: "none",
+  },
 };
 
 const store = new Store({ schema });
@@ -729,6 +754,53 @@ function initServeEvent(server) {
     });
 
     /**
+     * @description: client 请求串口状态
+     */
+    socket.on("serial-status", () => {
+      socket.emit("serial-status", {
+        connected: !!(
+          global.SERIAL_READER && global.SERIAL_READER.getSerialStatus()
+        ),
+      });
+    });
+
+    /**
+     * @description: client 请求获取可用串口列表
+     */
+    socket.on("serial-list", async () => {
+      try {
+        const SerialPort = require("serialport");
+        const ports = await SerialPort.list();
+        socket.emit("serial-list", ports.map((p) => p.path));
+      } catch (err) {
+        socket.emit("serial-list", []);
+      }
+    });
+
+    /**
+     * @description: client 请求开启串口
+     */
+    socket.on("serial-start", async (config) => {
+      try {
+        await global.SERIAL_READER.openSerial(config || store.store);
+        socket.emit("serial-start-result", { success: true });
+      } catch (err) {
+        socket.emit("serial-start-result", {
+          success: false,
+          message: err.message,
+        });
+      }
+    });
+
+    /**
+     * @description: client 请求关闭串口
+     */
+    socket.on("serial-stop", async () => {
+      await global.SERIAL_READER.closeSerial();
+      socket.emit("serial-stop-result", { success: true });
+    });
+
+    /**
      * @description: client 断开连接
      */
     socket.on("disconnect", () => {
@@ -936,6 +1008,51 @@ function initClientEvent() {
         client.emit("printStatusError", { msg: err.message });
       },
     );
+  });
+
+  /**
+   * @description: 中转服务 请求串口状态
+   */
+  client.on("serial-status", () => {
+    client.emit("serial-status", {
+      connected: !!(global.SERIAL_READER && global.SERIAL_READER.getSerialStatus()),
+    });
+  });
+
+  /**
+   * @description: 中转服务 请求获取可用串口列表
+   */
+  client.on("serial-list", async () => {
+    try {
+      const SerialPort = require("serialport");
+      const ports = await SerialPort.list();
+      client.emit("serial-list", ports.map((p) => p.path));
+    } catch (err) {
+      client.emit("serial-list", []);
+    }
+  });
+
+  /**
+   * @description: 中转服务 请求开启串口
+   */
+  client.on("serial-start", async (config) => {
+    try {
+      await global.SERIAL_READER.openSerial(config || store.store);
+      client.emit("serial-start-result", { success: true });
+    } catch (err) {
+      client.emit("serial-start-result", {
+        success: false,
+        message: err.message,
+      });
+    }
+  });
+
+  /**
+   * @description: 中转服务 请求关闭串口
+   */
+  client.on("serial-stop", async () => {
+    await global.SERIAL_READER.closeSerial();
+    client.emit("serial-stop-result", { success: true });
   });
 
   /**

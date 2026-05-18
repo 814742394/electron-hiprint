@@ -160,6 +160,10 @@
                 height: 600,
               },
               {
+                label: "串口设置",
+                name: "serialSet",
+              },
+              {
                 label: "中转设置",
                 name: "transitSet",
               },
@@ -184,6 +188,13 @@
               logPath: "",
               pdfPath: "",
               defaultPrinter: "",
+              // 串口配置
+              serialEnabled: false,
+              serialPort: "",
+              serialBaudRate: 9600,
+              serialDataBits: 8,
+              serialStopBits: 1,
+              serialParity: "none",
             },
             // 预制的版本，解决部分内网无法获取新版本的问题
             versions: [
@@ -206,6 +217,7 @@
             ],
             downloadedVersions: [], // 存储已下载版本
             printerList: [], // 打印机列表
+            serialPortList: [], // 可用串口列表
           };
         },
         computed: {
@@ -523,6 +535,112 @@
                   ],
                   display: this.setTab === "advancedSet",
                 },
+                // ===== 串口设置 =====
+                {
+                  label: "启用串口",
+                  prop: "serialEnabled",
+                  is: "el-switch",
+                  tips: "开启后自动连接所选串口设备",
+                  display: this.setTab === "serialSet",
+                },
+                {
+                  label: "串口",
+                  prop: "serialPort",
+                  is: "el-select",
+                  optionIs: "el-option",
+                  tips: "选择要连接的串口设备",
+                  attrs: {
+                    placeholder: "请选择串口",
+                    filterable: true,
+                  },
+                  options: this.serialPortList,
+                  event: {
+                    focus: () => {
+                      this.getSerialPortList();
+                    },
+                  },
+                  display:
+                    this.setTab === "serialSet" && this.formData.serialEnabled,
+                },
+                {
+                  label: "刷新串口",
+                  is: "el-button",
+                  content: "刷新列表",
+                  event: {
+                    click: () => {
+                      this.getSerialPortList();
+                    },
+                  },
+                  display:
+                    this.setTab === "serialSet" && this.formData.serialEnabled,
+                },
+                {
+                  label: "波特率",
+                  prop: "serialBaudRate",
+                  is: "el-select",
+                  optionIs: "el-option",
+                  attrs: {
+                    placeholder: "请选择波特率",
+                  },
+                  options: [
+                    { value: 110 },
+                    { value: 300 },
+                    { value: 600 },
+                    { value: 1200 },
+                    { value: 2400 },
+                    { value: 4800 },
+                    { value: 9600 },
+                    { value: 14400 },
+                    { value: 19200 },
+                    { value: 38400 },
+                    { value: 57600 },
+                    { value: 115200 },
+                    { value: 128000 },
+                    { value: 256000 },
+                  ].map((v) => ({ ...v, content: v.value + " bps" })),
+                  display:
+                    this.setTab === "serialSet" && this.formData.serialEnabled,
+                },
+                {
+                  label: "数据位",
+                  prop: "serialDataBits",
+                  is: "el-select",
+                  optionIs: "el-option",
+                  options: [5, 6, 7, 8].map((v) => ({
+                    value: v,
+                    content: v + " bit",
+                  })),
+                  display:
+                    this.setTab === "serialSet" && this.formData.serialEnabled,
+                },
+                {
+                  label: "停止位",
+                  prop: "serialStopBits",
+                  is: "el-select",
+                  optionIs: "el-option",
+                  options: [
+                    { value: 1, content: "1" },
+                    { value: 1.5, content: "1.5" },
+                    { value: 2, content: "2" },
+                  ],
+                  display:
+                    this.setTab === "serialSet" && this.formData.serialEnabled,
+                },
+                {
+                  label: "校验位",
+                  prop: "serialParity",
+                  is: "el-select",
+                  optionIs: "el-option",
+                  options: [
+                    { value: "none", content: "无" },
+                    { value: "even", content: "偶校验" },
+                    { value: "odd", content: "奇校验" },
+                    { value: "mark", content: "恒1" },
+                    { value: "space", content: "恒0" },
+                  ],
+                  display:
+                    this.setTab === "serialSet" && this.formData.serialEnabled,
+                },
               ],
             };
           },
@@ -542,6 +660,7 @@
           this.formData = store.store;
           this.getVersions();
           this.getPrintersList();
+          this.getSerialPortList();
         },
         mounted() {
           this.handleTabChange();
@@ -556,6 +675,12 @@
             });
             ipcRenderer.on("getPrintersList", (event, printers) => {
               this.printerList = printers;
+            });
+            ipcRenderer.on("serial-list", (event, ports) => {
+              this.serialPortList = ports.map((p) => ({
+                value: p,
+                label: p,
+              }));
             });
           },
           handleTabChange() {
@@ -676,6 +801,13 @@
            */
           getPrintersList() {
             ipcRenderer.send("getPrintersList"); // 请求打印机列表
+          },
+          /**
+           * @description: 获取可用串口列表
+           * @return {void}
+           */
+          getSerialPortList() {
+            ipcRenderer.send("serial-list");
           },
         },
       });

@@ -22,6 +22,7 @@ const printSetup = require("./src/print");
 const renderSetup = require("./src/render");
 const setSetup = require("./src/set");
 const printLogSetup = require("./src/printLog");
+const serialSetup = require("./src/serial");
 const {
   store,
   address,
@@ -67,6 +68,8 @@ global.PRINT_WINDOW = null;
 global.SET_WINDOW = null;
 // 渲染窗口
 global.RENDER_WINDOW = null;
+// 串口读取器
+global.SERIAL_READER = null;
 // 打印日志窗口
 global.PRINT_LOG_WINDOW = null;
 // socket.io 服务端
@@ -287,6 +290,10 @@ async function createWindow() {
   await printSetup();
   // 渲染窗口初始化
   await renderSetup();
+  // 串口初始化（根据配置自动连接）
+  serialSetup.initSerial();
+  // 注册串口 IPC 事件
+  serialSetup.initSerialEvent();
 
   return MAIN_WINDOW;
 }

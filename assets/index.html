@@ -61,6 +61,9 @@
           <div class="message">
             打印状态：<span>{{ printing ? "文档打印中" : "空闲" }}</span>
           </div>
+          <div class="message">
+            串口状态：<span>{{ serialConnected ? "已连接" : "未连接" }}</span>
+          </div>
           <div class="message row">
             设备编号：<span data-prop="deviceId" @click="handleCopy">{{ privateData(deviceId) }}</span>
           </div>
@@ -96,6 +99,7 @@
             pluginVersion: store.get("pluginVersion") || "未指定",
             displayPrivate: true,
             version,
+            serialConnected: false,
           };
         },
         created() {
@@ -113,6 +117,9 @@
             this.printing = arg;
           });
           ipc.on("clientConnection", this.transitActive);
+          ipc.on("serial-status", (event, arg) => {
+            this.serialConnected = arg;
+          });
         },
         methods: {
           openSetting() {
