@@ -33,8 +33,8 @@
     },
     "asar": true,
     "asarUnpack": [
-      "node_modules/serialport/**/*.node",
-      "node_modules/@serialport/**/*.node"
+      "node_modules/serialport/**",
+      "node_modules/@serialport/**"
     ],
     "files": [
       "**/*"

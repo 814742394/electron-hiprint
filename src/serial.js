@@ -1,12 +1,37 @@
 "use strict";
 
-const SerialPort = require("serialport");
-const ReadlineParser = require("@serialport/parser-readline");
-const { app, ipcMain } = require("electron");
-const { store } = require("../tools/utils");
-
 let serialPort = null;
 let parser = null;
+
+// 惰性加载 serialport，模块不可用时不会导致应用崩溃
+let _SerialPort = null;
+let _ReadlineParser = null;
+
+function getSerialPort() {
+  if (!_SerialPort) {
+    _SerialPort = require("serialport");
+  }
+  return _SerialPort;
+}
+
+function getReadlineParser() {
+  if (!_ReadlineParser) {
+    _ReadlineParser = require("@serialport/parser-readline");
+  }
+  return _ReadlineParser;
+}
+
+/**
+ * 检查 serialport 模块是否可用
+ */
+function isSerialModuleAvailable() {
+  try {
+    getSerialPort();
+    return true;
+  } catch (e) {
+    return false;
+  }
+}
 
 /**
  * 获取当前串口连接状态
@@ -29,7 +54,6 @@ function broadcastSerialStatus() {
   if (global.SOCKET_CLIENT?.connected) {
     global.SOCKET_CLIENT.emit("serial-status", { connected: status });
   }
-  // 通知主窗口
   global.MAIN_WINDOW?.webContents.send("serial-status", status);
 }
 
@@ -68,8 +92,14 @@ function broadcastSerialError(message) {
  * 打开串口连接
  */
 async function openSerial(config) {
-  // 先关闭已有连接
+  if (!isSerialModuleAvailable()) {
+    throw new Error("serialport 模块不可用");
+  }
+
   await closeSerial();
+
+  const SerialPort = getSerialPort();
+  const ReadlineParser = getReadlineParser();
 
   const options = {
     path: config.serialPort,
@@ -86,10 +116,7 @@ async function openSerial(config) {
     serialPort.on("open", () => {
       console.log(`==> 串口已打开: ${options.path} @ ${options.baudRate}bps`);
 
-      // 按行解析
-      parser = serialPort.pipe(
-        new ReadlineParser({ delimiter: "\n" }),
-      );
+      parser = serialPort.pipe(new ReadlineParser({ delimiter: "\n" }));
 
       parser.on("data", (line) => {
         line = line.trim();
@@ -145,6 +172,11 @@ async function closeSerial() {
  * 根据 store 配置自动初始化串口
  */
 async function initSerial() {
+  if (!isSerialModuleAvailable()) {
+    console.log("==> serialport 模块不可用，串口功能已禁用");
+    return;
+  }
+
   await closeSerial();
 
   if (!store.get("serialEnabled")) {
@@ -166,11 +198,13 @@ async function initSerial() {
 
 // ---- IPC 处理函数 ----
 
-/**
- * 获取可用串口列表
- */
 async function handleSerialList(event) {
+  if (!isSerialModuleAvailable()) {
+    event.sender.send("serial-list", []);
+    return [];
+  }
   try {
+    const SerialPort = getSerialPort();
     const ports = await SerialPort.list();
     event.sender.send("serial-list", ports.map((p) => p.path));
     return ports.map((p) => p.path);
@@ -181,9 +215,6 @@ async function handleSerialList(event) {
   }
 }
 
-/**
- * 打开串口（测试用）
- */
 async function handleSerialOpen(event, config) {
   try {
     await openSerial(config);
@@ -199,9 +230,6 @@ async function handleSerialOpen(event, config) {
   }
 }
 
-/**
- * 关闭串口
- */
 async function handleSerialClose() {
   await closeSerial();
 }
@@ -209,16 +237,28 @@ async function handleSerialClose() {
 // ---- IPC 事件注册/移除 ----
 
 function initSerialEvent() {
-  ipcMain.on("serial-list", handleSerialList);
-  ipcMain.on("serial-open", handleSerialOpen);
-  ipcMain.on("serial-close", handleSerialClose);
+  try {
+    // 注册串口列表获取（不依赖 serialport 模块）
+    ipcMain.on("serial-list", handleSerialList);
+    ipcMain.on("serial-open", handleSerialOpen);
+    ipcMain.on("serial-close", handleSerialClose);
+  } catch (err) {
+    console.error("==> 串口 IPC 注册失败:", err.message);
+  }
 }
 
 function removeSerialEvent() {
-  ipcMain.removeListener("serial-list", handleSerialList);
-  ipcMain.removeListener("serial-open", handleSerialOpen);
-  ipcMain.removeListener("serial-close", handleSerialClose);
+  try {
+    ipcMain.removeListener("serial-list", handleSerialList);
+    ipcMain.removeListener("serial-open", handleSerialOpen);
+    ipcMain.removeListener("serial-close", handleSerialClose);
+  } catch (err) {
+    // 忽略移除错误
+  }
 }
+
+const { app, ipcMain } = require("electron");
+const { store } = require("../tools/utils");
 
 module.exports = {
   initSerial,
@@ -227,4 +267,5 @@ module.exports = {
   getSerialStatus,
   initSerialEvent,
   removeSerialEvent,
+  isSerialModuleAvailable,
 };
