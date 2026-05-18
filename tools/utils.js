@@ -237,6 +237,64 @@ const schema = {
 const store = new Store({ schema });
 
 /**
+ * 获取可用串口列表
+ * 优先使用 serialport 原生模块，Windows 下失败时尝试注册表查询作为备选
+ * @returns {Promise<string[]>} 串口路径列表
+ */
+async function listSerialPorts() {
+  try {
+    const SerialPort = require("serialport");
+    const ports = await SerialPort.list();
+    if (ports && ports.length > 0) {
+      return ports.map((p) => p.path);
+    }
+    console.log("==> serialport.list() 返回空列表，尝试备选方案...");
+  } catch (err) {
+    console.error(`==> serialport.list() 失败: ${err.message}`);
+  }
+
+  // Windows 备选：通过注册表查询 COM 口（不依赖原生模块）
+  if (process.platform === "win32") {
+    return listWindowsSerialPorts();
+  }
+
+  return [];
+}
+
+/**
+ * Windows 下通过注册表查询串口列表
+ * @returns {Promise<string[]>}
+ */
+async function listWindowsSerialPorts() {
+  try {
+    const output = childProcess.execSync(
+      "reg query HKLM\\HARDWARE\\DEVICEMAP\\SERIALCOMM",
+      { encoding: "utf8", timeout: 5000, windowsHide: true },
+    );
+    const portSet = new Set();
+    const lines = output.split(/\r?\n/);
+    for (const line of lines) {
+      const match = line.match(/(COM\d+)/g);
+      if (match) {
+        match.forEach((p) => portSet.add(p.toUpperCase()));
+      }
+    }
+    const ports = [...portSet].sort((a, b) => {
+      const na = parseInt(a.replace("COM", ""), 10);
+      const nb = parseInt(b.replace("COM", ""), 10);
+      return na - nb;
+    });
+    if (ports.length > 0) {
+      console.log(`==> 通过注册表获取到串口: ${ports.join(", ")}`);
+    }
+    return ports;
+  } catch (err) {
+    console.error(`==> 注册表查询串口失败: ${err.message}`);
+    return [];
+  }
+}
+
+/**
  * @description: 获取当前系统 IP 地址
  * @return {String}
  */
@@ -769,10 +827,10 @@ function initServeEvent(server) {
      */
     socket.on("serial-list", async () => {
       try {
-        const SerialPort = require("serialport");
-        const ports = await SerialPort.list();
-        socket.emit("serial-list", ports.map((p) => p.path));
+        const ports = await listSerialPorts();
+        socket.emit("serial-list", ports);
       } catch (err) {
+        console.error(`==> 获取串口列表失败: ${err.message}`);
         socket.emit("serial-list", []);
       }
     });
@@ -1024,10 +1082,10 @@ function initClientEvent() {
    */
   client.on("serial-list", async () => {
     try {
-      const SerialPort = require("serialport");
-      const ports = await SerialPort.list();
-      client.emit("serial-list", ports.map((p) => p.path));
+      const ports = await listSerialPorts();
+      client.emit("serial-list", ports);
     } catch (err) {
+      console.error(`==> 获取串口列表失败: ${err.message}`);
       client.emit("serial-list", []);
     }
   });
@@ -1136,5 +1194,6 @@ module.exports = {
   getCurrentPrintStatusByName,
   getMachineId,
   showAboutDialog,
-   setWindowsAutoStart,
+  setWindowsAutoStart,
+  listSerialPorts,
 };

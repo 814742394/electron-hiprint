@@ -199,15 +199,10 @@ async function initSerial() {
 // ---- IPC 处理函数 ----
 
 async function handleSerialList(event) {
-  if (!isSerialModuleAvailable()) {
-    event.sender.send("serial-list", []);
-    return [];
-  }
   try {
-    const SerialPort = getSerialPort();
-    const ports = await SerialPort.list();
-    event.sender.send("serial-list", ports.map((p) => p.path));
-    return ports.map((p) => p.path);
+    const ports = await listSerialPorts();
+    event.sender.send("serial-list", ports);
+    return ports;
   } catch (err) {
     console.error(`==> 获取串口列表失败: ${err.message}`);
     event.sender.send("serial-list", []);
@@ -258,7 +253,7 @@ function removeSerialEvent() {
 }
 
 const { app, ipcMain } = require("electron");
-const { store } = require("../tools/utils");
+const { store, listSerialPorts } = require("../tools/utils");
 
 module.exports = {
   initSerial,
