@@ -246,11 +246,13 @@ async function listSerialPorts() {
     const SerialPort = require("serialport");
     const ports = await SerialPort.list();
     if (ports && ports.length > 0) {
-      return ports.map((p) => p.path);
+      const paths = ports.map((p) => p.path);
+      console.log(`==> [serialport] 原生模块获取串口列表: ${paths.join(", ")}`);
+      return paths;
     }
-    console.log("==> serialport.list() 返回空列表，尝试备选方案...");
+    console.log("==> [serialport] 原生模块 list() 返回空列表，尝试注册表备选方案...");
   } catch (err) {
-    console.error(`==> serialport.list() 失败: ${err.message}`);
+    console.error(`==> [serialport] 原生模块 list() 失败: ${err.message}`);
   }
 
   // Windows 备选：通过注册表查询 COM 口（不依赖原生模块）
@@ -258,6 +260,7 @@ async function listSerialPorts() {
     return listWindowsSerialPorts();
   }
 
+  console.log("==> [serialport] 非 Windows 平台且原生模块不可用，返回空列表");
   return [];
 }
 
@@ -268,29 +271,39 @@ async function listSerialPorts() {
  */
 async function listWindowsSerialPorts() {
   const regKeys = [
-    "HKLM\\HARDWARE\\DEVICEMAP\\SERIALCOMM",
-    "HKLM\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Ports",
+    { key: "HKLM\\HARDWARE\\DEVICEMAP\\SERIALCOMM", desc: "物理串口" },
+    { key: "HKLM\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Ports", desc: "虚拟串口" },
   ];
 
   const portSet = new Set();
 
-  for (const regKey of regKeys) {
+  for (const { key, desc } of regKeys) {
     try {
-      const output = childProcess.execSync(`reg query ${regKey}`, {
+      const output = childProcess.execSync(`reg query ${key}`, {
         encoding: "utf8",
         timeout: 5000,
         windowsHide: true,
       });
       const lines = output.split(/\r?\n/);
+      const found = [];
       for (const line of lines) {
         // 匹配 COM 口名称，如 COM1、COM3（Ports 键下可能为 COM1: 格式）
         const match = line.match(/(COM\d+)/gi);
         if (match) {
-          match.forEach((p) => portSet.add(p.toUpperCase().replace(/:$/, "")));
+          match.forEach((p) => {
+            const port = p.toUpperCase().replace(/:$/, "");
+            portSet.add(port);
+            found.push(port);
+          });
         }
       }
+      if (found.length > 0) {
+        console.log(`==> [注册表] ${desc}(${key}) => ${[...new Set(found)].join(", ")}`);
+      } else {
+        console.log(`==> [注册表] ${desc}(${key}) 未找到串口`);
+      }
     } catch (err) {
-      // 注册表键不存在则跳过
+      console.log(`==> [注册表] ${desc}(${key}) 查询失败: ${err.message}`);
     }
   }
 
@@ -301,7 +314,9 @@ async function listWindowsSerialPorts() {
   });
 
   if (ports.length > 0) {
-    console.log(`==> 通过注册表获取到串口: ${ports.join(", ")}`);
+    console.log(`==> [注册表] 汇总串口列表: ${ports.join(", ")}`);
+  } else {
+    console.log("==> [注册表] 未找到任何串口");
   }
   return ports;
 }
