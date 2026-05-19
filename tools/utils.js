@@ -263,35 +263,47 @@ async function listSerialPorts() {
 
 /**
  * Windows 下通过注册表查询串口列表
+ * 查询多个注册表路径以覆盖物理串口和虚拟串口
  * @returns {Promise<string[]>}
  */
 async function listWindowsSerialPorts() {
-  try {
-    const output = childProcess.execSync(
-      "reg query HKLM\\HARDWARE\\DEVICEMAP\\SERIALCOMM",
-      { encoding: "utf8", timeout: 5000, windowsHide: true },
-    );
-    const portSet = new Set();
-    const lines = output.split(/\r?\n/);
-    for (const line of lines) {
-      const match = line.match(/(COM\d+)/g);
-      if (match) {
-        match.forEach((p) => portSet.add(p.toUpperCase()));
+  const regKeys = [
+    "HKLM\\HARDWARE\\DEVICEMAP\\SERIALCOMM",
+    "HKLM\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Ports",
+  ];
+
+  const portSet = new Set();
+
+  for (const regKey of regKeys) {
+    try {
+      const output = childProcess.execSync(`reg query ${regKey}`, {
+        encoding: "utf8",
+        timeout: 5000,
+        windowsHide: true,
+      });
+      const lines = output.split(/\r?\n/);
+      for (const line of lines) {
+        // 匹配 COM 口名称，如 COM1、COM3（Ports 键下可能为 COM1: 格式）
+        const match = line.match(/(COM\d+)/gi);
+        if (match) {
+          match.forEach((p) => portSet.add(p.toUpperCase().replace(/:$/, "")));
+        }
       }
+    } catch (err) {
+      // 注册表键不存在则跳过
     }
-    const ports = [...portSet].sort((a, b) => {
-      const na = parseInt(a.replace("COM", ""), 10);
-      const nb = parseInt(b.replace("COM", ""), 10);
-      return na - nb;
-    });
-    if (ports.length > 0) {
-      console.log(`==> 通过注册表获取到串口: ${ports.join(", ")}`);
-    }
-    return ports;
-  } catch (err) {
-    console.error(`==> 注册表查询串口失败: ${err.message}`);
-    return [];
   }
+
+  const ports = [...portSet].sort((a, b) => {
+    const na = parseInt(a.replace("COM", ""), 10);
+    const nb = parseInt(b.replace("COM", ""), 10);
+    return na - nb;
+  });
+
+  if (ports.length > 0) {
+    console.log(`==> 通过注册表获取到串口: ${ports.join(", ")}`);
+  }
+  return ports;
 }
 
 /**
