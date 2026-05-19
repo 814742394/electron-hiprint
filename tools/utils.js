@@ -238,30 +238,49 @@ const store = new Store({ schema });
 
 /**
  * 获取可用串口列表
- * 优先使用 serialport 原生模块，Windows 下失败时尝试注册表查询作为备选
+ * 先通过 serialport 原生模块获取（含 PnP ID、厂商信息），
+ * Windows 下再通过注册表补充原生模块遗漏的虚拟串口，两者结果合并去重
  * @returns {Promise<string[]>} 串口路径列表
  */
 async function listSerialPorts() {
+  const portSet = new Set();
+
+  // 1. 原生模块：获取主流串口（PnP 设备树中的端口）
   try {
     const SerialPort = require("serialport");
     const ports = await SerialPort.list();
     if (ports && ports.length > 0) {
       const paths = ports.map((p) => p.path);
+      paths.forEach((p) => portSet.add(p));
       console.log(`==> [serialport] 原生模块获取串口列表: ${paths.join(", ")}`);
-      return paths;
+    } else {
+      console.log("==> [serialport] 原生模块 list() 返回空列表");
     }
-    console.log("==> [serialport] 原生模块 list() 返回空列表，尝试注册表备选方案...");
   } catch (err) {
     console.error(`==> [serialport] 原生模块 list() 失败: ${err.message}`);
   }
 
-  // Windows 备选：通过注册表查询 COM 口（不依赖原生模块）
+  // 2. Windows 注册表补充：获取原生模块遗漏的虚拟串口
   if (process.platform === "win32") {
-    return listWindowsSerialPorts();
+    const regPorts = await listWindowsSerialPorts();
+    if (regPorts.length > 0) {
+      const before = portSet.size;
+      regPorts.forEach((p) => portSet.add(p));
+      const added = portSet.size - before;
+      if (added > 0) {
+        console.log(`==> [serialport] 注册表补充了 ${added} 个串口`);
+      }
+    }
   }
 
-  console.log("==> [serialport] 非 Windows 平台且原生模块不可用，返回空列表");
-  return [];
+  const result = [...portSet].sort((a, b) => {
+    const na = parseInt(a.replace("COM", ""), 10) || 0;
+    const nb = parseInt(b.replace("COM", ""), 10) || 0;
+    return na - nb;
+  });
+
+  console.log(`==> [serialport] 最终串口列表: ${result.join(", ") || "(空)"}`);
+  return result;
 }
 
 /**
