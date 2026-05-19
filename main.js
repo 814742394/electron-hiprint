@@ -23,6 +23,7 @@ const renderSetup = require("./src/render");
 const setSetup = require("./src/set");
 const printLogSetup = require("./src/printLog");
 const serialSetup = require("./src/serial");
+global.SERIAL_READER = serialSetup;
 const {
   store,
   address,
