@@ -582,31 +582,10 @@ function initServeEvent(server) {
   server.on("connect", async (socket) => {
     console.log(`==> 插件端 New Connected: ${socket.id}`);
 
-    // 通知渲染进程已连接
-    MAIN_WINDOW.webContents.send(
-      "serverConnection",
-      server.engine.clientsCount,
-    );
-
-    // 判断是否允许通知
-    if (store.get("allowNotify")) {
-      // 弹出连接成功通知
-      const notification = new Notification({
-        title: "新的连接",
-        body: `已建立新的连接，当前连接数：${server.engine.clientsCount}`,
-      });
-      // 显示通知
-      notification.show();
-    }
-
-    // 向 client 发送打印机列表
-    socket.emit(
-      "printerList",
-      await MAIN_WINDOW.webContents.getPrintersAsync(),
-    );
-
-    // 向 client 发送客户端信息
-    emitClientInfo(socket);
+    // 调试：打印所有接收到的事件
+    socket.onAny((event, ...args) => {
+      console.log(`==> [事件] ${socket.id}: ${event}`, args.length > 0 ? args : "");
+    });
 
     /**
      * @description: client 请求客户端信息
@@ -886,6 +865,15 @@ function initServeEvent(server) {
      */
     socket.on("serial-start", async (config) => {
       try {
+        // web 客户端可能发送 JS 对象字面量字符串（非标准 JSON），尝试解析失败时降级到 store 配置
+        if (typeof config === "string") {
+          try {
+            config = JSON.parse(config);
+          } catch (_) {
+            console.warn("==> serial-start 配置格式非 JSON，使用 store 配置");
+            config = null;
+          }
+        }
         await global.SERIAL_READER.openSerial(config || store.store);
         socket.emit("serial-start-result", { success: true });
       } catch (err) {
@@ -900,7 +888,9 @@ function initServeEvent(server) {
      * @description: client 请求关闭串口
      */
     socket.on("serial-stop", async () => {
+      console.log(`==> 串口关闭中...`);
       await global.SERIAL_READER.closeSerial();
+      console.log(`==> 串口关闭完成`);
       socket.emit("serial-stop-result", { success: true });
     });
 
@@ -909,11 +899,39 @@ function initServeEvent(server) {
      */
     socket.on("disconnect", () => {
       console.log(`==> 插件端 Disconnect: ${socket.id}`);
+      // 客户端断开时自动关闭串口，防止 emit 后立即 disconnect 导致操作丢失
+      global.SERIAL_READER.closeSerial().catch(() => {});
       MAIN_WINDOW?.webContents?.send(
         "serverConnection",
         server.engine.clientsCount,
       );
     });
+
+    // 通知渲染进程已连接
+    MAIN_WINDOW.webContents.send(
+      "serverConnection",
+      server.engine.clientsCount,
+    );
+
+    // 判断是否允许通知
+    if (store.get("allowNotify")) {
+      // 弹出连接成功通知
+      const notification = new Notification({
+        title: "新的连接",
+        body: `已建立新的连接，当前连接数：${server.engine.clientsCount}`,
+      });
+      // 显示通知
+      notification.show();
+    }
+
+    // 向 client 发送打印机列表
+    socket.emit(
+      "printerList",
+      await MAIN_WINDOW.webContents.getPrintersAsync(),
+    );
+
+    // 向 client 发送客户端信息
+    emitClientInfo(socket);
   });
 }
 
@@ -924,6 +942,11 @@ function initServeEvent(server) {
 function initClientEvent() {
   // 作为客户端连接中转服务时只有一个全局 client
   var client = global.SOCKET_CLIENT;
+
+  // 调试：打印所有接收到的事件
+  client.onAny((event, ...args) => {
+    console.log(`==> [中转事件] ${client.id || "(未连接)"}: ${event}`, args.length > 0 ? args : "");
+  });
 
   /**
    * @description: 连接中转服务成功，绑定 socket 事件
@@ -1141,6 +1164,14 @@ function initClientEvent() {
    */
   client.on("serial-start", async (config) => {
     try {
+      if (typeof config === "string") {
+        try {
+          config = JSON.parse(config);
+        } catch (_) {
+          console.warn("==> [中转] serial-start 配置格式非 JSON，使用 store 配置");
+          config = null;
+        }
+      }
       await global.SERIAL_READER.openSerial(config || store.store);
       client.emit("serial-start-result", { success: true });
     } catch (err) {
@@ -1155,7 +1186,9 @@ function initClientEvent() {
    * @description: 中转服务 请求关闭串口
    */
   client.on("serial-stop", async () => {
+    console.log(`==> [中转] 串口关闭中...`);
     await global.SERIAL_READER.closeSerial();
+    console.log(`==> [中转] 串口关闭完成`);
     client.emit("serial-stop-result", { success: true });
   });
 

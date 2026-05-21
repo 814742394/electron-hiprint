@@ -1,24 +1,16 @@
 "use strict";
 
 let serialPort = null;
-let parser = null;
+let _closing = false; // 防止并发关闭串口
 
 // 惰性加载 serialport，模块不可用时不会导致应用崩溃
 let _SerialPort = null;
-let _ReadlineParser = null;
 
 function getSerialPort() {
   if (!_SerialPort) {
     _SerialPort = require("serialport");
   }
   return _SerialPort;
-}
-
-function getReadlineParser() {
-  if (!_ReadlineParser) {
-    _ReadlineParser = require("@serialport/parser-readline");
-  }
-  return _ReadlineParser;
 }
 
 /**
@@ -99,32 +91,32 @@ async function openSerial(config) {
   await closeSerial();
 
   const SerialPort = getSerialPort();
-  const ReadlineParser = getReadlineParser();
 
+  const portPath = config.serialPort || store.get("serialPort");
   const options = {
-    path: config.serialPort,
-    baudRate: parseInt(config.serialBaudRate, 10) || 9600,
-    dataBits: parseInt(config.serialDataBits, 10) || 8,
-    stopBits: parseFloat(config.serialStopBits) || 1,
-    parity: config.serialParity || "none",
+    baudRate: parseInt(config.serialBaudRate, 10) || store.get("serialBaudRate") || 9600,
+    dataBits: parseInt(config.serialDataBits, 10) || store.get("serialDataBits") || 8,
+    stopBits: parseFloat(config.serialStopBits) || store.get("serialStopBits") || 1,
+    parity: config.serialParity || store.get("serialParity") || "none",
     autoOpen: true,
   };
 
+  console.log(`==> 串口配置:`, { portPath, ...options });
+
   return new Promise((resolve, reject) => {
-    serialPort = new SerialPort(options);
+    serialPort = new SerialPort(portPath, options);
 
     serialPort.on("open", () => {
-      console.log(`==> 串口已打开: ${options.path} @ ${options.baudRate}bps`);
+      console.log(`==> 串口已打开: ${portPath} @ ${options.baudRate}bps`);
 
-      parser = serialPort.pipe(new ReadlineParser({ delimiter: "\n" }));
-
-      parser.on("data", (line) => {
-        line = line.trim();
-        if (line) {
-          console.log(`==> 串口数据: ${line}`);
-          broadcastSerialData(line);
-        }
+      serialPort.on("data", (chunk) => {
+        const text = chunk.toString();
+        console.log(`==> 串口数据: ${text}`);
+        broadcastSerialData(text);
       });
+
+      // 进入流动模式后 data 事件才会触发
+      serialPort.resume();
 
       serialPort.on("error", (err) => {
         console.error(`==> 串口错误: ${err.message}`);
@@ -153,18 +145,37 @@ async function openSerial(config) {
  * 关闭串口连接
  */
 async function closeSerial() {
+  if (_closing) {
+    console.log("==> 串口正在关闭中，跳过重复关闭");
+    return Promise.resolve();
+  }
   if (serialPort && serialPort.isOpen) {
+    _closing = true;
     return new Promise((resolve) => {
-      serialPort.close(() => {
+      // Windows 串口驱动有时会导致 close() 回调不触发，设置超时强制关闭
+      const timer = setTimeout(() => {
+        console.warn("==> 串口关闭超时，强制清理");
+        _closing = false;
         serialPort = null;
-        parser = null;
+        broadcastSerialStatus();
+        resolve();
+      }, 3000);
+
+      serialPort.close((err) => {
+        clearTimeout(timer);
+        if (err) {
+          console.warn(`==> 串口关闭出错: ${err.message}`);
+        }
+        console.log("==> 串口已关闭");
+        _closing = false;
+        serialPort = null;
         broadcastSerialStatus();
         resolve();
       });
     });
   }
+  _closing = false;
   serialPort = null;
-  parser = null;
   return Promise.resolve();
 }
 

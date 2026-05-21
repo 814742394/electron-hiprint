@@ -69,8 +69,8 @@ global.PRINT_WINDOW = null;
 global.SET_WINDOW = null;
 // 渲染窗口
 global.RENDER_WINDOW = null;
-// 串口读取器
-global.SERIAL_READER = null;
+// 串口读取器（已在行 25-26 通过 require('./src/serial') 初始化）
+// global.SERIAL_READER = null;
 // 打印日志窗口
 global.PRINT_LOG_WINDOW = null;
 // socket.io 服务端
