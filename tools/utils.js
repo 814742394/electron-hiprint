@@ -548,8 +548,118 @@ function queryPrintStatus(templateIds, onSuccess, onError) {
   );
 }
 
+function getSocketConnectionCount(server) {
+  if (server?.sockets instanceof Map) return server.sockets.size;
+  return server?.engine?.clientsCount || server?.server?.engine?.clientsCount || 0;
+}
+
+function useSocketTokenAuth(server, label) {
+  server.use((socket, next) => {
+    const token = store.get("token");
+    if (token && token !== socket.handshake.auth.token) {
+      console.log(
+        `==> ${label} Authentication error: ${socket.id}, token: ${socket.handshake.auth.token}`,
+      );
+      const err = new Error("Authentication error");
+      err.data = {
+        content: "Token 错误",
+      };
+      next(err);
+    } else {
+      next();
+    }
+  });
+}
+
+function parseSerialConfig(config, logPrefix) {
+  if (typeof config !== "string") return config;
+  try {
+    return JSON.parse(config);
+  } catch (_) {
+    console.warn(`==> ${logPrefix} serial-start 配置格式非 JSON，使用 store 配置`);
+    return null;
+  }
+}
+
+function emitSerialStatus(socket) {
+  socket.emit("serial-status", {
+    connected: !!(
+      global.SERIAL_READER && global.SERIAL_READER.getSerialStatus()
+    ),
+    ownerSocketId: global.SERIAL_OWNER_SOCKET_ID || null,
+  });
+}
+
+async function handleSerialList(socket) {
+  try {
+    const ports = await listSerialPorts();
+    socket.emit("serial-list", ports);
+  } catch (err) {
+    console.error(`==> 获取串口列表失败: ${err.message}`);
+    socket.emit("serial-list", []);
+  }
+}
+
+async function handleSerialStart(socket, config, logPrefix) {
+  try {
+    if (
+      global.SERIAL_READER?.getSerialStatus() &&
+      global.SERIAL_OWNER_SOCKET_ID &&
+      global.SERIAL_OWNER_SOCKET_ID !== socket.id
+    ) {
+      socket.emit("serial-start-result", {
+        success: false,
+        message: "当前已有串口 owner，不能重复打开串口",
+      });
+      return;
+    }
+    const realConfig = parseSerialConfig(config, logPrefix);
+    await global.SERIAL_READER.openSerial(realConfig || store.store);
+    global.SERIAL_OWNER_SOCKET_ID = socket.id;
+    socket.emit("serial-start-result", { success: true });
+  } catch (err) {
+    socket.emit("serial-start-result", {
+      success: false,
+      message: err.message,
+    });
+  }
+}
+
+async function handleSerialStop(socket, logPrefix) {
+  if (
+    global.SERIAL_OWNER_SOCKET_ID &&
+    global.SERIAL_OWNER_SOCKET_ID !== socket.id
+  ) {
+    socket.emit("serial-stop-result", {
+      success: false,
+      message: "当前连接不是串口 owner，不能关闭串口",
+    });
+    return;
+  }
+  console.log(`==> ${logPrefix} 串口关闭中...`);
+  await global.SERIAL_READER.closeSerial();
+  global.SERIAL_OWNER_SOCKET_ID = null;
+  console.log(`==> ${logPrefix} 串口关闭完成`);
+  socket.emit("serial-stop-result", { success: true });
+}
+
 /**
- * @description: 作为本地服务端时绑定的 socket 事件
+ * @description: 默认命名空间不承载业务事件
+ * @param {*} server
+ * @return {void}
+ */
+function initDefaultSocketEvent(server) {
+  if (!server) return false;
+  server.on("connect", (socket) => {
+    socket.emit("namespace-error", {
+      msg: "默认 namespace 已停用，请使用 /hiprint 或 /serial",
+    });
+    socket.disconnect(true);
+  });
+}
+
+/**
+ * @description: 作为本地服务端时绑定的打印 socket 事件
  * @param {*} server
  * @return {void}
  */
@@ -837,80 +947,20 @@ function initServeEvent(server) {
     });
 
     /**
-     * @description: client 请求串口状态
-     */
-    socket.on("serial-status", () => {
-      socket.emit("serial-status", {
-        connected: !!(
-          global.SERIAL_READER && global.SERIAL_READER.getSerialStatus()
-        ),
-      });
-    });
-
-    /**
-     * @description: client 请求获取可用串口列表
-     */
-    socket.on("serial-list", async () => {
-      try {
-        const ports = await listSerialPorts();
-        socket.emit("serial-list", ports);
-      } catch (err) {
-        console.error(`==> 获取串口列表失败: ${err.message}`);
-        socket.emit("serial-list", []);
-      }
-    });
-
-    /**
-     * @description: client 请求开启串口
-     */
-    socket.on("serial-start", async (config) => {
-      try {
-        // web 客户端可能发送 JS 对象字面量字符串（非标准 JSON），尝试解析失败时降级到 store 配置
-        if (typeof config === "string") {
-          try {
-            config = JSON.parse(config);
-          } catch (_) {
-            console.warn("==> serial-start 配置格式非 JSON，使用 store 配置");
-            config = null;
-          }
-        }
-        await global.SERIAL_READER.openSerial(config || store.store);
-        socket.emit("serial-start-result", { success: true });
-      } catch (err) {
-        socket.emit("serial-start-result", {
-          success: false,
-          message: err.message,
-        });
-      }
-    });
-
-    /**
-     * @description: client 请求关闭串口
-     */
-    socket.on("serial-stop", async () => {
-      console.log(`==> 串口关闭中...`);
-      await global.SERIAL_READER.closeSerial();
-      console.log(`==> 串口关闭完成`);
-      socket.emit("serial-stop-result", { success: true });
-    });
-
-    /**
      * @description: client 断开连接
      */
     socket.on("disconnect", () => {
       console.log(`==> 插件端 Disconnect: ${socket.id}`);
-      // 客户端断开时自动关闭串口，防止 emit 后立即 disconnect 导致操作丢失
-      global.SERIAL_READER.closeSerial().catch(() => {});
       MAIN_WINDOW?.webContents?.send(
         "serverConnection",
-        server.engine.clientsCount,
+        getSocketConnectionCount(server),
       );
     });
 
     // 通知渲染进程已连接
     MAIN_WINDOW.webContents.send(
       "serverConnection",
-      server.engine.clientsCount,
+      getSocketConnectionCount(server),
     );
 
     // 判断是否允许通知
@@ -918,7 +968,7 @@ function initServeEvent(server) {
       // 弹出连接成功通知
       const notification = new Notification({
         title: "新的连接",
-        body: `已建立新的连接，当前连接数：${server.engine.clientsCount}`,
+        body: `已建立新的连接，当前连接数：${getSocketConnectionCount(server)}`,
       });
       // 显示通知
       notification.show();
@@ -936,12 +986,60 @@ function initServeEvent(server) {
 }
 
 /**
+ * @description: 作为本地服务端时绑定的串口 socket 事件
+ * @param {*} server
+ * @return {void}
+ */
+function initSerialSocketEvent(server) {
+  if (!server) return false;
+
+  useSocketTokenAuth(server, "串口端");
+
+  server.on("connect", (socket) => {
+    console.log(`==> 串口端 New Connected: ${socket.id}`);
+
+    socket.onAny((event, ...args) => {
+      console.log(
+        `==> [串口事件] ${socket.id}: ${event}`,
+        args.length > 0 ? args : "",
+      );
+    });
+
+    socket.on("serial-status", () => {
+      emitSerialStatus(socket);
+    });
+
+    socket.on("serial-list", async () => {
+      await handleSerialList(socket);
+    });
+
+    socket.on("serial-start", async (config) => {
+      await handleSerialStart(socket, config, "串口端");
+    });
+
+    socket.on("serial-stop", async () => {
+      await handleSerialStop(socket, "串口端");
+    });
+
+    socket.on("disconnect", () => {
+      console.log(`==> 串口端 Disconnect: ${socket.id}`);
+      if (global.SERIAL_OWNER_SOCKET_ID === socket.id) {
+        global.SERIAL_READER.closeSerial().catch(() => {});
+        global.SERIAL_OWNER_SOCKET_ID = null;
+      }
+    });
+
+    emitSerialStatus(socket);
+  });
+}
+
+/**
  * @description: 作为客户端连接中转服务时绑定的 socket 事件
  * @return {void}
  */
 function initClientEvent() {
   // 作为客户端连接中转服务时只有一个全局 client
-  var client = global.SOCKET_CLIENT;
+  var client = global.HIPRINT_SOCKET_CLIENT;
 
   // 调试：打印所有接收到的事件
   client.onAny((event, ...args) => {
@@ -1138,66 +1236,55 @@ function initClientEvent() {
   });
 
   /**
-   * @description: 中转服务 请求串口状态
-   */
-  client.on("serial-status", () => {
-    client.emit("serial-status", {
-      connected: !!(global.SERIAL_READER && global.SERIAL_READER.getSerialStatus()),
-    });
-  });
-
-  /**
-   * @description: 中转服务 请求获取可用串口列表
-   */
-  client.on("serial-list", async () => {
-    try {
-      const ports = await listSerialPorts();
-      client.emit("serial-list", ports);
-    } catch (err) {
-      console.error(`==> 获取串口列表失败: ${err.message}`);
-      client.emit("serial-list", []);
-    }
-  });
-
-  /**
-   * @description: 中转服务 请求开启串口
-   */
-  client.on("serial-start", async (config) => {
-    try {
-      if (typeof config === "string") {
-        try {
-          config = JSON.parse(config);
-        } catch (_) {
-          console.warn("==> [中转] serial-start 配置格式非 JSON，使用 store 配置");
-          config = null;
-        }
-      }
-      await global.SERIAL_READER.openSerial(config || store.store);
-      client.emit("serial-start-result", { success: true });
-    } catch (err) {
-      client.emit("serial-start-result", {
-        success: false,
-        message: err.message,
-      });
-    }
-  });
-
-  /**
-   * @description: 中转服务 请求关闭串口
-   */
-  client.on("serial-stop", async () => {
-    console.log(`==> [中转] 串口关闭中...`);
-    await global.SERIAL_READER.closeSerial();
-    console.log(`==> [中转] 串口关闭完成`);
-    client.emit("serial-stop-result", { success: true });
-  });
-
-  /**
    * @description: 中转服务 断开连接
    */
   client.on("disconnect", () => {
     console.log(`==> 中转服务 Disconnect: ${client.id}`);
     MAIN_WINDOW.webContents.send("clientConnection", false);
+  });
+}
+
+/**
+ * @description: 作为客户端连接串口中转 namespace 时绑定的 socket 事件
+ * @return {void}
+ */
+function initSerialClientEvent() {
+  var client = global.SERIAL_SOCKET_CLIENT;
+  if (!client) return false;
+
+  client.onAny((event, ...args) => {
+    console.log(
+      `==> [中转串口事件] ${client.id || "(未连接)"}: ${event}`,
+      args.length > 0 ? args : "",
+    );
+  });
+
+  client.on("connect", () => {
+    console.log(`==> 中转串口服务 Connected Transit Server: ${client.id}`);
+  });
+
+  client.on("serial-status", () => {
+    emitSerialStatus(client);
+  });
+
+  client.on("serial-list", async () => {
+    await handleSerialList(client);
+  });
+
+  client.on("serial-start", async (config) => {
+    await handleSerialStart(client, config, "[中转]");
+  });
+
+  client.on("serial-stop", async () => {
+    await handleSerialStop(client, "[中转]");
+  });
+
+  client.on("disconnect", () => {
+    console.log(`==> 中转串口服务 Disconnect: ${client.id}`);
+    if (global.SERIAL_OWNER_SOCKET_ID === client.id) {
+      global.SERIAL_READER.closeSerial().catch(() => {});
+      global.SERIAL_OWNER_SOCKET_ID = null;
+    }
   });
 }
 
@@ -1268,8 +1355,11 @@ ${detail}`;
 module.exports = {
   store,
   address: _address,
+  initDefaultSocketEvent,
   initServeEvent,
   initClientEvent,
+  initSerialSocketEvent,
+  initSerialClientEvent,
   getCurrentPrintStatusByName,
   getMachineId,
   showAboutDialog,

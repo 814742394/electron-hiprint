@@ -54,9 +54,9 @@ function initPrintEvent() {
   ipcMain.on("do", async (event, data) => {
     let socket = null;
     if (data.clientType === "local") {
-      socket = SOCKET_SERVER.sockets.sockets.get(data.socketId);
+      socket = HIPRINT_NAMESPACE.sockets.get(data.socketId);
     } else {
-      socket = SOCKET_CLIENT;
+      socket = HIPRINT_SOCKET_CLIENT;
     }
     const printers = await PRINT_WINDOW.webContents.getPrintersAsync();
     let havePrinter = false;

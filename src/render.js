@@ -119,9 +119,9 @@ async function createRenderWindow() {
 async function capturePage(event, data) {
   let socket = null;
   if (data.clientType === "local") {
-    socket = SOCKET_SERVER.sockets.sockets.get(data.socketId);
+    socket = HIPRINT_NAMESPACE.sockets.get(data.socketId);
   } else {
-    socket = SOCKET_CLIENT;
+    socket = HIPRINT_SOCKET_CLIENT;
   }
   // !在 win 上窗口可以超出屏幕尺寸，直接使用 webContents.capturePage api 截图没有问题
   // !在 mac 上窗口不能超出屏幕尺寸，需要一点儿点儿截图最后拼接
@@ -250,9 +250,9 @@ async function capturePage(event, data) {
 function printToPDF(event, data) {
   let socket = null;
   if (data.clientType === "local") {
-    socket = SOCKET_SERVER.sockets.sockets.get(data.socketId);
+    socket = HIPRINT_NAMESPACE.sockets.get(data.socketId);
   } else {
-    socket = SOCKET_CLIENT;
+    socket = HIPRINT_SOCKET_CLIENT;
   }
   RENDER_WINDOW.webContents
     .printToPDF({
@@ -313,9 +313,9 @@ function printToPDF(event, data) {
 async function printFun(event, data) {
   let socket = null;
   if (data.clientType === "local") {
-    socket = SOCKET_SERVER.sockets.sockets.get(data.socketId);
+    socket = HIPRINT_NAMESPACE.sockets.get(data.socketId);
   } else {
-    socket = SOCKET_CLIENT;
+    socket = HIPRINT_SOCKET_CLIENT;
   }
   const printers = await RENDER_WINDOW.webContents.getPrintersAsync();
   let havePrinter = false;

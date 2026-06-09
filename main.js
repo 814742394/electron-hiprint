@@ -27,8 +27,11 @@ global.SERIAL_READER = serialSetup;
 const {
   store,
   address,
+  initDefaultSocketEvent,
   initServeEvent,
   initClientEvent,
+  initSerialSocketEvent,
+  initSerialClientEvent,
   getMachineId,
   showAboutDialog,
 } = require("./tools/utils");
@@ -75,8 +78,14 @@ global.RENDER_WINDOW = null;
 global.PRINT_LOG_WINDOW = null;
 // socket.io 服务端
 global.SOCKET_SERVER = null;
+// Socket.IO 命名空间
+global.HIPRINT_NAMESPACE = null;
+global.SERIAL_NAMESPACE = null;
 // socket.io-client 客户端
-global.SOCKET_CLIENT = null;
+global.HIPRINT_SOCKET_CLIENT = null;
+global.SERIAL_SOCKET_CLIENT = null;
+// 当前串口连接归属的 socket id
+global.SERIAL_OWNER_SOCKET_ID = null;
 // 打印队列，解决打印并发崩溃问题
 global.PRINT_RUNNER = new TaskRunner({ concurrency: 1 });
 // 打印队列 done 集合
@@ -115,6 +124,8 @@ const ioServer = (global.SOCKET_SERVER = new require("socket.io")(server, {
     credentials: false,
   },
 }));
+global.HIPRINT_NAMESPACE = ioServer.of("/hiprint");
+global.SERIAL_NAMESPACE = ioServer.of("/serial");
 
 // socket.io 客户端，用于连接中转服务
 const ioClient = require("socket.io-client").io;
@@ -260,14 +271,26 @@ async function createWindow() {
       // 本地服务开启端口监听
       server.listen(store.get("port") || 17521);
       // 初始化本地 服务端事件
-      initServeEvent(ioServer);
+      initDefaultSocketEvent(ioServer);
+      initServeEvent(global.HIPRINT_NAMESPACE);
+      initSerialSocketEvent(global.SERIAL_NAMESPACE);
       // 有配置中转服务时连接中转服务
       if (
         store.get("connectTransit") &&
         store.get("transitUrl") &&
         store.get("transitToken")
       ) {
-        global.SOCKET_CLIENT = ioClient(store.get("transitUrl"), {
+        const transitUrl = store.get("transitUrl").replace(/\/+$/, "");
+        global.HIPRINT_SOCKET_CLIENT = ioClient(`${transitUrl}/hiprint`, {
+          transports: ["websocket"],
+          query: {
+            client: "electron-hiprint",
+          },
+          auth: {
+            token: store.get("transitToken"),
+          },
+        });
+        global.SERIAL_SOCKET_CLIENT = ioClient(`${transitUrl}/serial`, {
           transports: ["websocket"],
           query: {
             client: "electron-hiprint",
@@ -279,6 +302,7 @@ async function createWindow() {
 
         // 初始化中转 客户端事件
         initClientEvent();
+        initSerialClientEvent();
       }
     } catch (error) {
       console.error(error);

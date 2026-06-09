@@ -49,7 +49,9 @@ npm run build-w-64
 
 1. **客户端服务**：通过 socket.io (默认端口 17521)提供服务。
 
-   - 使用 `socket.io-client@4.x` 连接: `http://localhost:17521`
+   - 打印命名空间: `http://localhost:17521/hiprint`
+   - 串口命名空间: `http://localhost:17521/serial`
+   - 默认命名空间 `/` 不承载业务事件。
 
 2. **发送打印数据**：通过 `socket.emit` 方法发送打印数据
 
@@ -173,7 +175,7 @@ npm run build-w-64
    ```js
    import { io } from "socket.io-client";
 
-   const socket = io("http://localhost:17521", {
+   const socket = io("http://localhost:17521/hiprint", {
      transports: ["websocket"],
      auth: {
        token: "vue-plugin-hiprint",
@@ -650,7 +652,7 @@ const fs = require("fs");
 const panel = require("./panel.json");
 const printData = require("./print-data.json");
 
-const socket = io("http://localhost:17521", {
+const socket = io("http://localhost:17521/hiprint", {
   transports: ["websocket"],
   reconnectionAttempts: 5,
   auth: {
@@ -749,6 +751,40 @@ socket.on("printStatus", (rows) => {
 socket.on("printStatusError", (err) => {
   console.error(err.msg);
 });
+```
+
+## 串口命名空间
+
+串口事件只在 `/serial` 命名空间可用，避免打印连接重连影响串口连接。
+
+```js
+import { io } from "socket.io-client";
+
+const serialSocket = io("http://localhost:17521/serial", {
+  transports: ["websocket"],
+  auth: {
+    token: "vue-plugin-hiprint",
+  },
+});
+
+serialSocket.emit("serial-list");
+serialSocket.on("serial-list", (ports) => {
+  console.log(ports);
+});
+
+serialSocket.emit("serial-start", {
+  serialPort: "COM1",
+  serialBaudRate: 9600,
+  serialDataBits: 8,
+  serialStopBits: 1,
+  serialParity: "none",
+});
+
+serialSocket.on("serial-data", ({ data }) => {
+  console.log(data);
+});
+
+serialSocket.emit("serial-stop");
 ```
 
 ## URL Scheme 支持

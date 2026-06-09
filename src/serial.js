@@ -37,14 +37,14 @@ function getSerialStatus() {
  */
 function broadcastSerialStatus() {
   const status = getSerialStatus();
-  const sockets = global.SOCKET_SERVER?.sockets?.sockets;
+  const sockets = global.SERIAL_NAMESPACE?.sockets;
   if (sockets) {
     for (const [, socket] of sockets) {
       socket.emit("serial-status", { connected: status });
     }
   }
-  if (global.SOCKET_CLIENT?.connected) {
-    global.SOCKET_CLIENT.emit("serial-status", { connected: status });
+  if (global.SERIAL_SOCKET_CLIENT?.connected) {
+    global.SERIAL_SOCKET_CLIENT.emit("serial-status", { connected: status });
   }
   global.MAIN_WINDOW?.webContents.send("serial-status", status);
 }
@@ -54,14 +54,14 @@ function broadcastSerialStatus() {
  */
 function broadcastSerialData(data) {
   const payload = { data, timestamp: Date.now() };
-  const sockets = global.SOCKET_SERVER?.sockets?.sockets;
+  const sockets = global.SERIAL_NAMESPACE?.sockets;
   if (sockets) {
     for (const [, socket] of sockets) {
       socket.emit("serial-data", payload);
     }
   }
-  if (global.SOCKET_CLIENT?.connected) {
-    global.SOCKET_CLIENT.emit("serial-data", payload);
+  if (global.SERIAL_SOCKET_CLIENT?.connected) {
+    global.SERIAL_SOCKET_CLIENT.emit("serial-data", payload);
   }
 }
 
@@ -69,14 +69,14 @@ function broadcastSerialData(data) {
  * 向所有 Socket.IO 客户端广播串口错误
  */
 function broadcastSerialError(message) {
-  const sockets = global.SOCKET_SERVER?.sockets?.sockets;
+  const sockets = global.SERIAL_NAMESPACE?.sockets;
   if (sockets) {
     for (const [, socket] of sockets) {
       socket.emit("serial-error", { message, timestamp: Date.now() });
     }
   }
-  if (global.SOCKET_CLIENT?.connected) {
-    global.SOCKET_CLIENT.emit("serial-error", { message, timestamp: Date.now() });
+  if (global.SERIAL_SOCKET_CLIENT?.connected) {
+    global.SERIAL_SOCKET_CLIENT.emit("serial-error", { message, timestamp: Date.now() });
   }
 }
 
@@ -157,6 +157,7 @@ async function closeSerial() {
         console.warn("==> 串口关闭超时，强制清理");
         _closing = false;
         serialPort = null;
+        global.SERIAL_OWNER_SOCKET_ID = null;
         broadcastSerialStatus();
         resolve();
       }, 3000);
@@ -169,6 +170,7 @@ async function closeSerial() {
         console.log("==> 串口已关闭");
         _closing = false;
         serialPort = null;
+        global.SERIAL_OWNER_SOCKET_ID = null;
         broadcastSerialStatus();
         resolve();
       });
@@ -176,6 +178,7 @@ async function closeSerial() {
   }
   _closing = false;
   serialPort = null;
+  global.SERIAL_OWNER_SOCKET_ID = null;
   return Promise.resolve();
 }
 
