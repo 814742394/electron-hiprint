@@ -20,3 +20,5 @@ out/
 .history/
 tools/database.sqlite
 /build-info.json
+
+# Claude Code project config (local user settings).claude/

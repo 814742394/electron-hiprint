@@ -291,13 +291,8 @@ async function createWindow() {
   await printSetup();
   // 渲染窗口初始化
   await renderSetup();
-  // 串口初始化（根据配置自动连接）
-  try {
-    serialSetup.initSerial();
-    serialSetup.initSerialEvent();
-  } catch (err) {
-    console.error("==> 串口初始化失败:", err.message);
-  }
+  // 注册串口 IPC 事件（不自动打开，等待用户手动触发）
+  serialSetup.initSerialEvent();
 
   return MAIN_WINDOW;
 }
