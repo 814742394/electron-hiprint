@@ -111,7 +111,9 @@ async function openSerial(config) {
 
       serialPort.on("data", (chunk) => {
         const text = chunk.toString();
-        console.log(`==> 串口数据: ${text}`);
+        if (store.get("serialDataLogEnabled")) {
+          console.log(`==> 串口数据: ${text}`);
+        }
         broadcastSerialData(text);
       });
 

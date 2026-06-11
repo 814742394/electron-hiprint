@@ -190,6 +190,7 @@
               defaultPrinter: "",
               // 串口配置
               serialEnabled: false,
+              serialDataLogEnabled: true,
               serialPort: "",
               serialBaudRate: 9600,
               serialDataBits: 8,
@@ -541,6 +542,13 @@
                   prop: "serialEnabled",
                   is: "el-switch",
                   tips: "开启后自动连接所选串口设备",
+                  display: this.setTab === "serialSet",
+                },
+                {
+                  label: "记录串口数据日志",
+                  prop: "serialDataLogEnabled",
+                  is: "el-switch",
+                  tips: "关闭后不打印串口数据内容，也不写入日志文件",
                   display: this.setTab === "serialSet",
                 },
                 {

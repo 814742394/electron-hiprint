@@ -212,6 +212,10 @@ const schema = {
     type: "boolean",
     default: false,
   },
+  serialDataLogEnabled: {
+    type: "boolean",
+    default: true,
+  },
   serialPort: {
     type: "string",
     default: "",

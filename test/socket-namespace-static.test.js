@@ -11,6 +11,7 @@ const main = read("main.js");
 const utils = read("tools/utils.js");
 const serial = read("src/serial.js");
 const readme = read("README.md");
+const setHtml = read("assets/set.html");
 
 assert(
   main.includes('.of("/hiprint")'),
@@ -63,6 +64,20 @@ assert(
 assert(
   readme.includes("http://localhost:17521/serial"),
   "README should document /serial",
+);
+assert(
+  /serialDataLogEnabled:\s*\{[\s\S]*?default:\s*true/.test(utils),
+  "tools/utils.js should define serialDataLogEnabled with default true",
+);
+assert(
+  setHtml.includes("serialDataLogEnabled") &&
+    setHtml.includes("记录串口数据日志"),
+  "settings page should expose serial data log switch",
+);
+assert(
+  serial.includes('store.get("serialDataLogEnabled")') &&
+    /if\s*\(\s*store\.get\("serialDataLogEnabled"\)\s*\)\s*\{[\s\S]*?console\.log\(`==> 串口数据: \$\{text\}`\);[\s\S]*?\}/.test(serial),
+  "serial data console.log should be controlled by serialDataLogEnabled",
 );
 
 console.log("socket namespace static checks passed");
