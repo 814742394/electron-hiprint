@@ -778,6 +778,7 @@ serialSocket.emit("serial-start", {
   serialDataBits: 8,
   serialStopBits: 1,
   serialParity: "none",
+  serialOutputMode: "hex", // 可选: "text" | "hex"，默认 "text"
 });
 
 serialSocket.on("serial-data", ({ data }) => {

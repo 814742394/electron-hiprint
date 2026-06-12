@@ -191,6 +191,7 @@
               // 串口配置
               serialEnabled: false,
               serialDataLogEnabled: true,
+              serialOutputMode: "text",
               serialPort: "",
               serialBaudRate: 9600,
               serialDataBits: 8,
@@ -550,6 +551,19 @@
                   is: "el-switch",
                   tips: "关闭后不打印串口数据内容，也不写入日志文件",
                   display: this.setTab === "serialSet",
+                },
+                {
+                  label: "输出模式",
+                  prop: "serialOutputMode",
+                  is: "el-select",
+                  optionIs: "el-option",
+                  tips: "选择串口数据对外发送和日志记录时的格式",
+                  options: [
+                    { value: "text", content: "文本 UTF-8" },
+                    { value: "hex", content: "HEX" },
+                  ],
+                  display:
+                    this.setTab === "serialSet" && this.formData.serialEnabled,
                 },
                 {
                   label: "串口",

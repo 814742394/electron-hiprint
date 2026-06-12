@@ -79,5 +79,24 @@ assert(
     /if\s*\(\s*store\.get\("serialDataLogEnabled"\)\s*\)\s*\{[\s\S]*?console\.log\(`==> 串口数据: \$\{text\}`\);[\s\S]*?\}/.test(serial),
   "serial data console.log should be controlled by serialDataLogEnabled",
 );
+assert(
+  /serialOutputMode:\s*\{[\s\S]*?default:\s*"text"/.test(utils),
+  "tools/utils.js should define serialOutputMode with default text",
+);
+assert(
+  setHtml.includes("serialOutputMode") &&
+    setHtml.includes("输出模式") &&
+    setHtml.includes("HEX"),
+  "settings page should expose serial output mode selector",
+);
+assert(
+  serial.includes('store.get("serialOutputMode")') &&
+    /chunk\.toString\(\s*"hex"\s*\)/.test(serial),
+  "serial data should support hex output mode",
+);
+assert(
+  readme.includes("serialOutputMode") && readme.includes('"hex"'),
+  "README should document serialOutputMode",
+);
 
 console.log("socket namespace static checks passed");

@@ -216,6 +216,10 @@ const schema = {
     type: "boolean",
     default: true,
   },
+  serialOutputMode: {
+    type: "string",
+    default: "text",
+  },
   serialPort: {
     type: "string",
     default: "",

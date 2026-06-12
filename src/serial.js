@@ -93,6 +93,7 @@ async function openSerial(config) {
   const SerialPort = getSerialPort();
 
   const portPath = config.serialPort || store.get("serialPort");
+  const outputMode = config.serialOutputMode || store.get("serialOutputMode") || "text";
   const options = {
     baudRate: parseInt(config.serialBaudRate, 10) || store.get("serialBaudRate") || 9600,
     dataBits: parseInt(config.serialDataBits, 10) || store.get("serialDataBits") || 8,
@@ -110,7 +111,7 @@ async function openSerial(config) {
       console.log(`==> 串口已打开: ${portPath} @ ${options.baudRate}bps`);
 
       serialPort.on("data", (chunk) => {
-        const text = chunk.toString();
+        const text = outputMode === "hex" ? chunk.toString("hex") : chunk.toString();
         if (store.get("serialDataLogEnabled")) {
           console.log(`==> 串口数据: ${text}`);
         }
