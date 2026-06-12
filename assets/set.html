@@ -543,6 +543,7 @@
                   prop: "serialEnabled",
                   is: "el-switch",
                   tips: "开启后自动连接所选串口设备",
+                  span: 12,
                   display: this.setTab === "serialSet",
                 },
                 {
@@ -550,6 +551,7 @@
                   prop: "serialDataLogEnabled",
                   is: "el-switch",
                   tips: "关闭后不打印串口数据内容，也不写入日志文件",
+                  span: 12,
                   display: this.setTab === "serialSet",
                 },
                 {
@@ -562,6 +564,7 @@
                     { value: "text", content: "文本 UTF-8" },
                     { value: "hex", content: "HEX" },
                   ],
+                  span: 12,
                   display:
                     this.setTab === "serialSet" && this.formData.serialEnabled,
                 },
@@ -581,6 +584,7 @@
                       this.getSerialPortList();
                     },
                   },
+                  span: 18,
                   display:
                     this.setTab === "serialSet" && this.formData.serialEnabled,
                 },
@@ -593,6 +597,7 @@
                       this.getSerialPortList();
                     },
                   },
+                  span: 6,
                   display:
                     this.setTab === "serialSet" && this.formData.serialEnabled,
                 },
@@ -620,6 +625,7 @@
                     { value: 128000 },
                     { value: 256000 },
                   ].map((v) => ({ ...v, content: v.value + " bps" })),
+                  span: 12,
                   display:
                     this.setTab === "serialSet" && this.formData.serialEnabled,
                 },
@@ -632,6 +638,7 @@
                     value: v,
                     content: v + " bit",
                   })),
+                  span: 12,
                   display:
                     this.setTab === "serialSet" && this.formData.serialEnabled,
                 },
@@ -645,6 +652,7 @@
                     { value: 1.5, content: "1.5" },
                     { value: 2, content: "2" },
                   ],
+                  span: 12,
                   display:
                     this.setTab === "serialSet" && this.formData.serialEnabled,
                 },
@@ -660,6 +668,7 @@
                     { value: "mark", content: "恒1" },
                     { value: "space", content: "恒0" },
                   ],
+                  span: 12,
                   display:
                     this.setTab === "serialSet" && this.formData.serialEnabled,
                 },
