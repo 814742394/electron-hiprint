@@ -192,6 +192,9 @@
               serialEnabled: false,
               serialDataLogEnabled: true,
               serialOutputMode: "text",
+              serialForwardMode: "realtime",
+              serialLatestChunkCount: 3,
+              serialLatestFlushInterval: 50,
               serialPort: "",
               serialBaudRate: 9600,
               serialDataBits: 8,
@@ -567,6 +570,52 @@
                   span: 12,
                   display:
                     this.setTab === "serialSet" && this.formData.serialEnabled,
+                },
+                {
+                  label: "串口转发模式",
+                  prop: "serialForwardMode",
+                  is: "el-select",
+                  optionIs: "el-option",
+                  tips: "实时转发保留完整数据流，最新数据模式会丢弃旧的未转发 chunk",
+                  options: [
+                    { value: "realtime", content: "实时转发" },
+                    { value: "latest", content: "最新数据模式" },
+                  ],
+                  span: 12,
+                  display:
+                    this.setTab === "serialSet" && this.formData.serialEnabled,
+                },
+                {
+                  label: "保留最新 chunk 数",
+                  prop: "serialLatestChunkCount",
+                  is: "el-input-number",
+                  tips: "最新数据模式下每次转发最多保留的最近 chunk 数",
+                  attrs: {
+                    min: 1,
+                    max: 20,
+                    controls: false,
+                  },
+                  span: 12,
+                  display:
+                    this.setTab === "serialSet" &&
+                    this.formData.serialEnabled &&
+                    this.formData.serialForwardMode === "latest",
+                },
+                {
+                  label: "转发间隔(ms)",
+                  prop: "serialLatestFlushInterval",
+                  is: "el-input-number",
+                  tips: "最新数据模式下转发最近 chunk 的时间间隔",
+                  attrs: {
+                    min: 10,
+                    max: 1000,
+                    controls: false,
+                  },
+                  span: 12,
+                  display:
+                    this.setTab === "serialSet" &&
+                    this.formData.serialEnabled &&
+                    this.formData.serialForwardMode === "latest",
                 },
                 {
                   label: "串口",

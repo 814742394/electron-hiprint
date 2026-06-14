@@ -98,5 +98,43 @@ assert(
   readme.includes("serialOutputMode") && readme.includes('"hex"'),
   "README should document serialOutputMode",
 );
+assert(
+  /serialForwardMode:\s*\{[\s\S]*?default:\s*"realtime"/.test(utils),
+  "tools/utils.js should define serialForwardMode with default realtime",
+);
+assert(
+  /serialLatestChunkCount:\s*\{[\s\S]*?default:\s*3/.test(utils),
+  "tools/utils.js should define serialLatestChunkCount with default 3",
+);
+assert(
+  /serialLatestFlushInterval:\s*\{[\s\S]*?default:\s*50/.test(utils),
+  "tools/utils.js should define serialLatestFlushInterval with default 50",
+);
+assert(
+  setHtml.includes("serialForwardMode") &&
+    setHtml.includes("串口转发模式") &&
+    setHtml.includes("最新数据模式"),
+  "settings page should expose serial forward mode selector",
+);
+assert(
+  setHtml.includes("serialLatestChunkCount") &&
+    setHtml.includes("保留最新 chunk 数") &&
+    setHtml.includes("serialLatestFlushInterval") &&
+    setHtml.includes("转发间隔(ms)"),
+  "settings page should expose latest forwarding parameters",
+);
+assert(
+  serial.includes('serialForwardMode === "latest"') &&
+    serial.includes("serialLatestQueue") &&
+    serial.includes("flushLatestSerialData") &&
+    serial.includes("clearLatestSerialForwarder"),
+  "serial data should support latest queue forwarding mode",
+);
+assert(
+  readme.includes("serialForwardMode") &&
+    readme.includes("serialLatestChunkCount") &&
+    readme.includes("serialLatestFlushInterval"),
+  "README should document latest serial forwarding options",
+);
 
 console.log("socket namespace static checks passed");

@@ -2,6 +2,8 @@
 
 let serialPort = null;
 let _closing = false; // 防止并发关闭串口
+let serialLatestQueue = [];
+let serialLatestTimer = null;
 
 // 惰性加载 serialport，模块不可用时不会导致应用崩溃
 let _SerialPort = null;
@@ -65,6 +67,38 @@ function broadcastSerialData(data) {
   }
 }
 
+function logSerialData(text) {
+  if (store.get("serialDataLogEnabled")) {
+    console.log(`==> 串口数据: ${text}`);
+  }
+}
+
+function flushLatestSerialData() {
+  if (!serialLatestQueue.length) return;
+
+  const list = serialLatestQueue;
+  serialLatestQueue = [];
+  list.forEach((data) => {
+    logSerialData(data);
+    broadcastSerialData(data);
+  });
+}
+
+function clearLatestSerialForwarder() {
+  if (serialLatestTimer) {
+    clearInterval(serialLatestTimer);
+    serialLatestTimer = null;
+  }
+  serialLatestQueue = [];
+}
+
+function appendLatestSerialData(data, chunkCount) {
+  serialLatestQueue.push(data);
+  if (serialLatestQueue.length > chunkCount) {
+    serialLatestQueue = serialLatestQueue.slice(-chunkCount);
+  }
+}
+
 /**
  * 向所有 Socket.IO 客户端广播串口错误
  */
@@ -89,11 +123,22 @@ async function openSerial(config) {
   }
 
   await closeSerial();
+  clearLatestSerialForwarder();
 
   const SerialPort = getSerialPort();
 
   const portPath = config.serialPort || store.get("serialPort");
   const outputMode = config.serialOutputMode || store.get("serialOutputMode") || "text";
+  const serialForwardMode =
+    config.serialForwardMode || store.get("serialForwardMode") || "realtime";
+  const serialLatestChunkCount =
+    parseInt(config.serialLatestChunkCount, 10) ||
+    store.get("serialLatestChunkCount") ||
+    3;
+  const serialLatestFlushInterval =
+    parseInt(config.serialLatestFlushInterval, 10) ||
+    store.get("serialLatestFlushInterval") ||
+    50;
   const options = {
     baudRate: parseInt(config.serialBaudRate, 10) || store.get("serialBaudRate") || 9600,
     dataBits: parseInt(config.serialDataBits, 10) || store.get("serialDataBits") || 8,
@@ -109,12 +154,20 @@ async function openSerial(config) {
 
     serialPort.on("open", () => {
       console.log(`==> 串口已打开: ${portPath} @ ${options.baudRate}bps`);
+      if (serialForwardMode === "latest") {
+        serialLatestTimer = setInterval(
+          flushLatestSerialData,
+          serialLatestFlushInterval,
+        );
+      }
 
       serialPort.on("data", (chunk) => {
         const text = outputMode === "hex" ? chunk.toString("hex") : chunk.toString();
-        if (store.get("serialDataLogEnabled")) {
-          console.log(`==> 串口数据: ${text}`);
+        if (serialForwardMode === "latest") {
+          appendLatestSerialData(text, serialLatestChunkCount);
+          return;
         }
+        logSerialData(text);
         broadcastSerialData(text);
       });
 
@@ -123,11 +176,13 @@ async function openSerial(config) {
 
       serialPort.on("error", (err) => {
         console.error(`==> 串口错误: ${err.message}`);
+        clearLatestSerialForwarder();
         broadcastSerialError(err.message);
       });
 
       serialPort.on("close", () => {
         console.log("==> 串口已关闭");
+        clearLatestSerialForwarder();
         broadcastSerialStatus();
       });
 
@@ -137,6 +192,7 @@ async function openSerial(config) {
 
     serialPort.on("error", (err) => {
       console.error(`==> 串口打开失败: ${err.message}`);
+      clearLatestSerialForwarder();
       serialPort = null;
       broadcastSerialStatus();
       reject(err);
@@ -159,6 +215,7 @@ async function closeSerial() {
       const timer = setTimeout(() => {
         console.warn("==> 串口关闭超时，强制清理");
         _closing = false;
+        clearLatestSerialForwarder();
         serialPort = null;
         global.SERIAL_OWNER_SOCKET_ID = null;
         broadcastSerialStatus();
@@ -172,6 +229,7 @@ async function closeSerial() {
         }
         console.log("==> 串口已关闭");
         _closing = false;
+        clearLatestSerialForwarder();
         serialPort = null;
         global.SERIAL_OWNER_SOCKET_ID = null;
         broadcastSerialStatus();
@@ -180,6 +238,7 @@ async function closeSerial() {
     });
   }
   _closing = false;
+  clearLatestSerialForwarder();
   serialPort = null;
   global.SERIAL_OWNER_SOCKET_ID = null;
   return Promise.resolve();

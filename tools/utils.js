@@ -220,6 +220,20 @@ const schema = {
     type: "string",
     default: "text",
   },
+  serialForwardMode: {
+    type: "string",
+    default: "realtime",
+  },
+  serialLatestChunkCount: {
+    type: "number",
+    minimum: 1,
+    default: 3,
+  },
+  serialLatestFlushInterval: {
+    type: "number",
+    minimum: 10,
+    default: 50,
+  },
   serialPort: {
     type: "string",
     default: "",

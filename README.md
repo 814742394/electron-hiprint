@@ -779,6 +779,9 @@ serialSocket.emit("serial-start", {
   serialStopBits: 1,
   serialParity: "none",
   serialOutputMode: "hex", // 可选: "text" | "hex"，默认 "text"
+  serialForwardMode: "latest", // 可选: "realtime" | "latest"，默认 "realtime"
+  serialLatestChunkCount: 3, // latest 模式下保留最近 chunk 数，默认 3
+  serialLatestFlushInterval: 50, // latest 模式下转发间隔(ms)，默认 50
 });
 
 serialSocket.on("serial-data", ({ data }) => {
