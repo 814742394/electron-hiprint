@@ -113,7 +113,8 @@ assert(
 assert(
   setHtml.includes("serialForwardMode") &&
     setHtml.includes("串口转发模式") &&
-    setHtml.includes("最新数据模式"),
+    setHtml.includes("最新数据模式") &&
+    setHtml.includes("完整帧模式"),
   "settings page should expose serial forward mode selector",
 );
 assert(
@@ -131,10 +132,17 @@ assert(
   "serial data should support latest queue forwarding mode",
 );
 assert(
+  serial.includes('serialForwardMode === "frame"') &&
+    serial.includes("createHexFrameForwarder") &&
+    serial.includes("hexFrameForwarder"),
+  "serial data should support hex frame forwarding mode",
+);
+assert(
   readme.includes("serialForwardMode") &&
+    readme.includes('"frame"') &&
     readme.includes("serialLatestChunkCount") &&
     readme.includes("serialLatestFlushInterval"),
-  "README should document latest serial forwarding options",
+  "README should document serial forwarding options",
 );
 
 console.log("socket namespace static checks passed");

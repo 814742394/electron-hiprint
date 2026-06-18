@@ -576,10 +576,11 @@
                   prop: "serialForwardMode",
                   is: "el-select",
                   optionIs: "el-option",
-                  tips: "实时转发保留完整数据流，最新数据模式会丢弃旧的未转发 chunk",
+                  tips: "实时转发保留完整数据流，最新数据模式会丢弃旧的未转发 chunk，完整帧模式按 HEX 帧转发",
                   options: [
                     { value: "realtime", content: "实时转发" },
                     { value: "latest", content: "最新数据模式" },
+                    { value: "frame", content: "完整帧模式" },
                   ],
                   span: 12,
                   display:

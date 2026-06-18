@@ -779,7 +779,7 @@ serialSocket.emit("serial-start", {
   serialStopBits: 1,
   serialParity: "none",
   serialOutputMode: "hex", // 可选: "text" | "hex"，默认 "text"
-  serialForwardMode: "latest", // 可选: "realtime" | "latest"，默认 "realtime"
+  serialForwardMode: "frame", // 可选: "realtime" | "latest" | "frame"，默认 "realtime"
   serialLatestChunkCount: 3, // latest 模式下保留最近 chunk 数，默认 3
   serialLatestFlushInterval: 50, // latest 模式下转发间隔(ms)，默认 50
 });
@@ -790,6 +790,8 @@ serialSocket.on("serial-data", ({ data }) => {
 
 serialSocket.emit("serial-stop");
 ```
+
+`serialForwardMode: "frame"` 仅在 `serialOutputMode: "hex"` 时生效，会按 `02` 开始、`0d` 结束转发完整 HEX 帧；例如拆成多段收到的 `022c302020202035`、`3737202020303030`、`0d` 会合并为一次 `022c30202020203537372020203030300d` 发送。
 
 ## URL Scheme 支持
 

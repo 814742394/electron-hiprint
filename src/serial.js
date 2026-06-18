@@ -1,9 +1,12 @@
 "use strict";
 
+const { createHexFrameForwarder } = require("./serialFrame");
+
 let serialPort = null;
 let _closing = false; // 防止并发关闭串口
 let serialLatestQueue = [];
 let serialLatestTimer = null;
+let hexFrameForwarder = null;
 
 // 惰性加载 serialport，模块不可用时不会导致应用崩溃
 let _SerialPort = null;
@@ -99,6 +102,20 @@ function appendLatestSerialData(data, chunkCount) {
   }
 }
 
+function clearHexFrameForwarder() {
+  if (hexFrameForwarder) {
+    hexFrameForwarder.clear();
+  }
+  hexFrameForwarder = null;
+}
+
+function createRuntimeHexFrameForwarder() {
+  hexFrameForwarder = createHexFrameForwarder((frame) => {
+    logSerialData(frame);
+    broadcastSerialData(frame);
+  });
+}
+
 /**
  * 向所有 Socket.IO 客户端广播串口错误
  */
@@ -124,6 +141,7 @@ async function openSerial(config) {
 
   await closeSerial();
   clearLatestSerialForwarder();
+  clearHexFrameForwarder();
 
   const SerialPort = getSerialPort();
 
@@ -159,12 +177,18 @@ async function openSerial(config) {
           flushLatestSerialData,
           serialLatestFlushInterval,
         );
+      } else if (serialForwardMode === "frame" && outputMode === "hex") {
+        createRuntimeHexFrameForwarder();
       }
 
       serialPort.on("data", (chunk) => {
         const text = outputMode === "hex" ? chunk.toString("hex") : chunk.toString();
         if (serialForwardMode === "latest") {
           appendLatestSerialData(text, serialLatestChunkCount);
+          return;
+        }
+        if (serialForwardMode === "frame" && outputMode === "hex") {
+          hexFrameForwarder.append(text);
           return;
         }
         logSerialData(text);
@@ -177,12 +201,14 @@ async function openSerial(config) {
       serialPort.on("error", (err) => {
         console.error(`==> 串口错误: ${err.message}`);
         clearLatestSerialForwarder();
+        clearHexFrameForwarder();
         broadcastSerialError(err.message);
       });
 
       serialPort.on("close", () => {
         console.log("==> 串口已关闭");
         clearLatestSerialForwarder();
+        clearHexFrameForwarder();
         broadcastSerialStatus();
       });
 
@@ -193,6 +219,7 @@ async function openSerial(config) {
     serialPort.on("error", (err) => {
       console.error(`==> 串口打开失败: ${err.message}`);
       clearLatestSerialForwarder();
+      clearHexFrameForwarder();
       serialPort = null;
       broadcastSerialStatus();
       reject(err);
@@ -216,6 +243,7 @@ async function closeSerial() {
         console.warn("==> 串口关闭超时，强制清理");
         _closing = false;
         clearLatestSerialForwarder();
+        clearHexFrameForwarder();
         serialPort = null;
         global.SERIAL_OWNER_SOCKET_ID = null;
         broadcastSerialStatus();
@@ -230,6 +258,7 @@ async function closeSerial() {
         console.log("==> 串口已关闭");
         _closing = false;
         clearLatestSerialForwarder();
+        clearHexFrameForwarder();
         serialPort = null;
         global.SERIAL_OWNER_SOCKET_ID = null;
         broadcastSerialStatus();
@@ -239,6 +268,7 @@ async function closeSerial() {
   }
   _closing = false;
   clearLatestSerialForwarder();
+  clearHexFrameForwarder();
   serialPort = null;
   global.SERIAL_OWNER_SOCKET_ID = null;
   return Promise.resolve();
